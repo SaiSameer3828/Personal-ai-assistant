@@ -1,0 +1,9 @@
+node_modules/
+data/
+cron.log
+
+credentials.json
+token.json
+
+.env
+Personal_Ai_Assistant/
