@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node start.mjs",
     "bot": "node discord-bot.mjs",
+    "whatsapp": "node whatsapp-webhook.mjs",
     "ingest": "node scripts/ingest-emails-to-memory.mjs",
     "auth": "node gmail-auth.mjs",
     "digest": "node digest.mjs",
