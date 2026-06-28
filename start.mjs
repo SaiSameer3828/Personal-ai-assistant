@@ -173,6 +173,14 @@ try {
     // Copy configurations back to the persistent volume so gbrain CLI can locate them
     await syncLocalDbToPersistent();
     console.log("✅ Database preparation complete.");
+
+    // Run diagnostics to debug the PGlite initialization failure
+    console.log("🩺 Running gbrain doctor diagnostics inside container...");
+    try {
+      execSync("gbrain doctor", { stdio: "inherit" });
+    } catch (docErr) {
+      console.error("❌ gbrain doctor command failed:", docErr.message);
+    }
   }
 } catch (err) {
   console.error("⚠️ Failed to initialize/seed GBrain database:", err.message);
