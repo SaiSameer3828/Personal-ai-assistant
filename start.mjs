@@ -127,7 +127,7 @@ try {
   console.error("⚠️ Failed to initialize/seed GBrain database:", err.message);
 }
 
-// 4. Inject GEMINI_API_KEY into gbrain config.json when in Docker
+// 4. Inject GEMINI_API_KEY into gbrain config.json and run diagnostics when in Docker
 try {
   if (isDocker) {
     const homeDir = process.env.HOME || "/root";
@@ -140,9 +140,18 @@ try {
       fs.writeFileSync(gbrainConfigPath, JSON.stringify(configJson, null, 2), "utf8");
       console.log("✅ Injected GEMINI_API_KEY into gbrain config.json.");
     }
+
+    // Run diagnostics to debug the PGlite initialization failure
+    console.log("🩺 Running gbrain doctor diagnostics inside container...");
+    try {
+      const { execSync } = await import("child_process");
+      execSync("gbrain doctor", { stdio: "inherit" });
+    } catch (docErr) {
+      console.error("❌ gbrain doctor command failed:", docErr.message);
+    }
   }
 } catch (err) {
-  console.error("⚠️ Failed to inject API key into gbrain config.json:", err.message);
+  console.error("⚠️ Failed to inject API key or run diagnostics:", err.message);
 }
 
 console.log("🚀 Personal AI Assistant — Starting services...\n");
