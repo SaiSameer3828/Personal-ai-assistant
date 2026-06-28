@@ -6,13 +6,25 @@ import { config } from "./config.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Helper to sanitize environment variables that might contain outer quotes
+function sanitizeEnvJson(val) {
+  if (!val) return val;
+  let str = val.trim();
+  if ((str.startsWith("'") && str.endsWith("'")) || (str.startsWith('"') && str.endsWith('"'))) {
+    str = str.substring(1, str.length - 1).trim();
+  }
+  return str;
+}
+
 // 1. Recreate credentials and token files from env if they don't exist (e.g. on Railway)
 if (process.env.GMAIL_CREDENTIALS_JSON && !fs.existsSync(path.join(__dirname, "credentials.json"))) {
-  fs.writeFileSync(path.join(__dirname, "credentials.json"), process.env.GMAIL_CREDENTIALS_JSON, "utf8");
+  const sanitizedCreds = sanitizeEnvJson(process.env.GMAIL_CREDENTIALS_JSON);
+  fs.writeFileSync(path.join(__dirname, "credentials.json"), sanitizedCreds, "utf8");
   console.log("📝 Created credentials.json from GMAIL_CREDENTIALS_JSON environment variable.");
 }
 if (process.env.GMAIL_TOKEN_JSON && !fs.existsSync(path.join(__dirname, "token.json"))) {
-  fs.writeFileSync(path.join(__dirname, "token.json"), process.env.GMAIL_TOKEN_JSON, "utf8");
+  const sanitizedToken = sanitizeEnvJson(process.env.GMAIL_TOKEN_JSON);
+  fs.writeFileSync(path.join(__dirname, "token.json"), sanitizedToken, "utf8");
   console.log("📝 Created token.json from GMAIL_TOKEN_JSON environment variable.");
 }
 
@@ -52,11 +64,28 @@ try {
 
       // Inject Gemini API Key
       if (process.env.GEMINI_API_KEY) {
+        // Setup Google API profile definition in openclaw.json (without key to prevent schema errors)
         if (!configJson.auth.profiles["google:default"]) {
           configJson.auth.profiles["google:default"] = { mode: "api_key", provider: "google" };
         }
-        configJson.auth.profiles["google:default"].key = process.env.GEMINI_API_KEY;
-        console.log("✅ Injected GEMINI_API_KEY into openclaw.json");
+        
+        // Write actual key to the internal auth-profiles.json file where OpenClaw expects it
+        const authProfilesDir = path.join(homeDir, ".openclaw", "agents", "main", "agent");
+        fs.mkdirSync(authProfilesDir, { recursive: true });
+        
+        const authProfilesPath = path.join(authProfilesDir, "auth-profiles.json");
+        const authProfilesJson = {
+          version: 1,
+          profiles: {
+            "google:default": {
+              type: "api_key",
+              provider: "google",
+              key: process.env.GEMINI_API_KEY
+            }
+          }
+        };
+        fs.writeFileSync(authProfilesPath, JSON.stringify(authProfilesJson, null, 2), "utf8");
+        console.log("✅ Injected GEMINI_API_KEY into OpenClaw auth-profiles.json");
       }
 
       // Align workspace path with container home directory
