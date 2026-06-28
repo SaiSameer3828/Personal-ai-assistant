@@ -138,8 +138,11 @@ try {
       fs.rmSync(localDbDir, { recursive: true, force: true });
     }
     if (fs.existsSync(persistentDbDir)) {
-      // Clean up locks folder from persistent storage to avoid stale locks
-      fs.rmSync(persistentDbDir, { recursive: true, force: true });
+      // Clean up files inside persistent storage but keep the mount directory
+      const files = fs.readdirSync(persistentDbDir);
+      for (const file of files) {
+        fs.rmSync(path.join(persistentDbDir, file), { recursive: true, force: true });
+      }
     }
 
     // Create local writable tmp directory for fast db lock operations
