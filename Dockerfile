@@ -20,11 +20,11 @@ WORKDIR /usr/src
 RUN git clone https://github.com/garrytan/gbrain.git
 WORKDIR /usr/src/gbrain
 RUN bun install
-RUN bun run build
 
-# Set up global and local compatibility symlinks pointing directly to the compiled standalone binary
-RUN mkdir -p /root/.bun/bin && ln -s /usr/src/gbrain/bin/gbrain /root/.bun/bin/gbrain
-RUN mkdir -p /home/radesh/.bun/bin && ln -s /usr/src/gbrain/bin/gbrain /home/radesh/.bun/bin/gbrain
+# Set up global and local compatibility shell wrappers to run gbrain from the physical path (bypassing Bun VFS bugs)
+RUN mkdir -p /root/.bun/bin /home/radesh/.bun/bin
+RUN echo '#!/bin/sh\nexec bun /usr/src/gbrain/src/cli.ts "$@"' > /root/.bun/bin/gbrain && chmod +x /root/.bun/bin/gbrain
+RUN ln -s /root/.bun/bin/gbrain /home/radesh/.bun/bin/gbrain
 
 # Install OpenClaw globally (standard method)
 RUN npm install -g openclaw@latest
