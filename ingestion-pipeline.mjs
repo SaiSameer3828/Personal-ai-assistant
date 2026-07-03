@@ -5,6 +5,8 @@ import { fetchEmails } from "./lib/gmail-client.mjs";
 import { storeEmail, storeCalendarEvent } from "./lib/gbrain-client.mjs";
 import { getTodaysEvents, getUpcomingEvents } from "./lib/calendar-client.mjs";
 import { config } from "./config.mjs";
+import { hasAlertBeenSent, markAlertAsSent, setSessionState } from "./lib/session-state.mjs";
+
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -120,6 +122,86 @@ async function runCalendarIngestion() {
   }
 
   console.log(`Calendar: ${stored} stored, ${skipped} skipped (duplicates).`);
+
+  // Check for upcoming meetings starting in the next 60 minutes
+  try {
+    await checkForUpcomingMeetings(events);
+  } catch (err) {
+    console.error("Error checking for upcoming meetings:", err.message);
+  }
+}
+
+/**
+ * Check for meetings starting soon and send an alert if not already sent.
+ * @param {Array} events - Calendar events list
+ */
+async function checkForUpcomingMeetings(events) {
+  const now = new Date();
+  const CHANNEL_ID = config.discord.channelId || "1516680999772094617";
+  const token = config.discord.token;
+
+  for (const event of events) {
+    if (!event.start) continue;
+
+    const start = new Date(event.start);
+    const diffMs = start.getTime() - now.getTime();
+    const diffMins = diffMs / (60 * 1000);
+
+    // Alert if starting in the next 60 minutes (and not in the past)
+    if (diffMins > 0 && diffMins <= 60) {
+      if (!hasAlertBeenSent(event.id)) {
+        console.log(`[Meeting Alert] "${event.title}" is starting in ${Math.round(diffMins)} minutes.`);
+        
+        // Prevent duplicate alerts
+        markAlertAsSent(event.id);
+
+        // Set prompt confirmation state
+        setSessionState({
+          activePrompt: {
+            type: "meeting_prep_confirm",
+            target: event.title,
+            timestamp: Date.now()
+          }
+        });
+
+        // Format and send alert
+        const startTimeStr = start.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+        const alertMessage = `⏰ **Upcoming Meeting Alert:** "${event.title}" is starting in ${Math.round(diffMins)} minutes (at ${startTimeStr}).\n` +
+          `Would you like me to prepare a meeting brief for you?`;
+
+        try {
+          if (token) {
+            await sendDiscordAlert(CHANNEL_ID, alertMessage);
+            console.log(`[Meeting Alert] Alert sent successfully for "${event.title}".`);
+          } else {
+            console.warn("[Meeting Alert] Discord token not configured. Cannot send alert.");
+          }
+        } catch (err) {
+          console.error(`[Meeting Alert] Failed to send Discord alert for "${event.title}":`, err.message);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Send alert message via Discord API.
+ */
+async function sendDiscordAlert(channelId, text) {
+  const token = config.discord.token;
+  const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bot ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ content: text }),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Discord API error (${res.status}): ${errText}`);
+  }
 }
 
 // Run immediately on start

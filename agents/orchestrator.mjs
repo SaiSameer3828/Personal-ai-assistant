@@ -6,6 +6,7 @@ import { getTodaysMeetings, getUpcomingMeetings } from "./calendar-agent.mjs";
 import { searchWhatsAppMessages, summarizeWhatsAppChat } from "./whatsapp-agent.mjs";
 import { searchMeetings, getTodaysMeetingSummaries } from "./meetings-agent.mjs";
 import { prepareForMeeting, getStoredMeetings } from "./meeting-processor.mjs";
+import { getSessionState, clearSessionState } from "../lib/session-state.mjs";
 
 /**
  * GStack Orchestrator - Routes user requests to the appropriate specialized agent.
@@ -25,9 +26,31 @@ import { prepareForMeeting, getStoredMeetings } from "./meeting-processor.mjs";
  *   search_whatsapp     → WhatsApp Agent
  *   summarize_whatsapp  → WhatsApp Agent
  *   general_query       → Memory Agent (cross-source GBrain search)
+ *   unknown           → Memory Agent (cross-source GBrain search)
  */
 export async function processCommand(message) {
   const cleanMsg = message.toLowerCase().trim().replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "");
+  
+  // Check if there is an active prompt confirmation state
+  const session = getSessionState();
+  if (session && session.activePrompt && session.activePrompt.type === "meeting_prep_confirm") {
+    const elapsed = Date.now() - session.activePrompt.timestamp;
+    if (elapsed < 15 * 60 * 1000) {
+      const isYes = ["yes", "y", "sure", "yeah", "ok", "okay", "do it", "please", "confirm"].includes(cleanMsg);
+      const isNo = ["no", "n", "nope", "dont", "do not", "cancel"].includes(cleanMsg);
+      
+      if (isYes) {
+        const target = session.activePrompt.target;
+        clearSessionState();
+        return await prepareForMeeting(target);
+      } else if (isNo) {
+        clearSessionState();
+        return "Okay, I won't prepare a brief for this meeting. Let me know if you need anything else! 👍";
+      }
+    }
+    // Expired or irrelevant reply, clear state and proceed normally
+    clearSessionState();
+  }
   
   const greetings = ["hi", "hello", "hey", "yo", "greetings", "good morning", "good afternoon", "good evening"];
   const acknowledgements = ["ok", "okay", "thanks", "thank you", "cool", "got it", "fine"];
