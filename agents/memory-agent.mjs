@@ -1,4 +1,4 @@
-import { queryGBrain } from "../lib/gbrain-client.mjs";
+import { queryGBrain, parseGbrainResults, runGbrain } from "../lib/gbrain-client.mjs";
 import { generateResponse, generateMeetingBrief } from "../lib/gemini-client.mjs";
 
 /**
@@ -12,17 +12,35 @@ import { generateResponse, generateMeetingBrief } from "../lib/gemini-client.mjs
  */
 export async function crossSourceSearch(query) {
   let rawResults = "";
+  let fullDocs = [];
+  
   try {
     rawResults = queryGBrain(query);
+    if (rawResults && rawResults.trim().length > 0) {
+      const matches = parseGbrainResults(rawResults);
+      const uniqueSlugs = [...new Set(matches.map((m) => m.slug))].slice(0, 3);
+      
+      for (const slug of uniqueSlugs) {
+        try {
+          const docContent = runGbrain(`get ${slug}`);
+          if (docContent && docContent.trim().length > 0) {
+            fullDocs.push(`### Document: ${slug}\n${docContent}`);
+          }
+        } catch (getErr) {
+          console.warn(`Failed to fetch full doc for slug ${slug}:`, getErr.message);
+        }
+      }
+    }
   } catch (err) {
     console.error("GBrain query failed:", err.message);
   }
 
   const prompt = `You are a helpful personal AI assistant. Answer the user's query or message.
 We searched the user's personal knowledge base (emails, meetings, messages) for: "${query}".
-Here are the search results:
+
+Here are the search results (full matching documents):
 ---
-${rawResults && rawResults.trim().length > 0 ? rawResults : "(No matching records found in database)"}
+${fullDocs.length > 0 ? fullDocs.join("\n\n") : "(No matching records found in database)"}
 ---
 
 Instructions:

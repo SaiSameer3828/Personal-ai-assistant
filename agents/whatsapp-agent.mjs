@@ -1,6 +1,7 @@
 import { queryGBrain, storeDocument, parseGbrainResults } from "../lib/gbrain-client.mjs";
 import { generateResponse } from "../lib/gemini-client.mjs";
 import { sendWhatsAppMessage } from "../lib/whatsapp-client.mjs";
+import { processCommand } from "./orchestrator.mjs";
 
 /**
  * WhatsApp Agent - Handles WhatsApp message storage, search, and summarization.
@@ -128,42 +129,24 @@ export async function processIncomingMessage(message) {
     return "You're welcome! Let me know if you need anything else. 👍";
   }
 
-  // If the message looks like a command/question, generate a response
-  const text = message.text.toLowerCase().trim();
-  const isQuery = text.includes("?") ||
-    text.startsWith("search") ||
-    text.startsWith("find") ||
-    text.startsWith("summarize") ||
-    text.startsWith("what") ||
-    text.startsWith("show");
-
-  if (isQuery) {
-    // Search GBrain and respond
-    const results = queryGBrain(message.text);
-    if (results && results.trim().length > 0) {
-      const prompt = `Based on the following information from my knowledge base, answer this question concisely: "${message.text}"
- 
-Information:
-${results}`;
- 
-      try {
-        return await generateResponse(prompt);
-      } catch (err) {
-        console.error("Error generating response in processIncomingMessage:", err);
-        const errMsg = (err && err.message) ? err.message : String(err);
-        if (
-          errMsg.includes("429") ||
-          errMsg.includes("quota") ||
-          errMsg.includes("limit") ||
-          errMsg.includes("overloaded") ||
-          errMsg.includes("RESOURCE_EXHAUSTED")
-        ) {
-          return "⚠️ The AI Assistant is currently rate-limited or experiencing high load. Please try again in a few minutes.";
-        }
-        return "⚠️ Sorry, I encountered an error while processing your request. Please try again.";
-      }
+  // Route ALL other messages through the full orchestrator
+  // This gives WhatsApp users the same capabilities as Discord:
+  // email search, summarization, calendar, meeting prep, daily reports, etc.
+  try {
+    return await processCommand(message.text);
+  } catch (err) {
+    console.error("Error in WhatsApp processIncomingMessage:", err);
+    const errMsg = (err && err.message) ? err.message : String(err);
+    if (
+      errMsg.includes("429") ||
+      errMsg.includes("quota") ||
+      errMsg.includes("limit") ||
+      errMsg.includes("overloaded") ||
+      errMsg.includes("RESOURCE_EXHAUSTED")
+    ) {
+      return "⚠️ The AI Assistant is currently rate-limited. Please try again in a few minutes.";
     }
+    return "⚠️ Sorry, I encountered an error while processing your request. Please try again.";
   }
-
-  return null; // Just store, don't respond
 }
+

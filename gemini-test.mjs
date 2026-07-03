@@ -6,7 +6,7 @@ console.log("Testing with Gemini API key from config:", config.gemini.apiKey);
 async function run() {
   try {
     const genAI = new GoogleGenerativeAI(config.gemini.apiKey);
-    const models = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash", "gemini-flash-latest"];
+    const models = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash", "gemini-flash-latest"];
     
     for (const modelName of models) {
       console.log(`\nTesting model: ${modelName}...`);

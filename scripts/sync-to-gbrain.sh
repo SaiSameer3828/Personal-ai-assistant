@@ -30,7 +30,7 @@ if [ $count -eq 0 ]; then
 fi
 
 # Use gbrain import for batch processing (skips existing by default)
-gbrain import "$IMPORT_DIR" 2>&1
+gbrain import --no-embed "$IMPORT_DIR" 2>&1
 
 echo ""
 echo "✅ GBrain sync complete"

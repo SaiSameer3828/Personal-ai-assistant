@@ -12,6 +12,9 @@ import path from "path";
 import { google } from "googleapis";
 import { execSync } from "child_process";
 import os from "os";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const GBRAIN_PATH = "/home/radesh/.bun/bin/gbrain";
 const BUN_PATH = "/home/radesh/.bun/bin";
@@ -189,10 +192,10 @@ try {
   // Trigger GBrain sync for all memory emails
   console.log("Syncing to GBrain...");
   try {
-    execSync(`bash /mnt/c/Users/botsa/email-collector/scripts/sync-to-gbrain.sh`, {
+    const key = process.env.GEMINI_API_KEY || "";
+    execSync(`wsl bash -c "export GOOGLE_GENERATIVE_AI_API_KEY='${key}' && export GEMINI_API_KEY='${key}' && bash /mnt/c/Users/botsa/email-collector/scripts/sync-to-gbrain.sh"`, {
       stdio: "inherit",
       timeout: 120000,
-      env: { ...process.env, PATH: `${BUN_PATH}:/usr/bin:/bin:${process.env.PATH || ""}` },
     });
   } catch (err) {
     console.warn("GBrain sync failed:", err.message);
