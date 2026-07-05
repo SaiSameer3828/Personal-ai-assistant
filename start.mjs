@@ -130,6 +130,7 @@ const homeDir = process.env.HOME || "/root";
 const persistentDbDir = process.env.PERSISTENT_DB_DIR || path.join(homeDir, ".gbrain");
 
 async function syncLocalDbToPersistent() {
+  if (process.env.DATABASE_URL) return;
   try {
     if (fs.existsSync(path.join(localDbDir, "brain.pglite"))) {
       const { execSync } = await import("child_process");
@@ -160,83 +161,110 @@ try {
     if (fs.existsSync(localDbDir)) {
       fs.rmSync(localDbDir, { recursive: true, force: true });
     }
-
-    // Create local writable tmp directory for fast db lock operations
     fs.mkdirSync(localDbDir, { recursive: true });
 
-    // Determine if database already exists in the persistent volume
-    const hasPersistentDb = fs.existsSync(path.join(persistentDbDir, "brain.pglite"));
+    if (process.env.DATABASE_URL) {
+      // Clean connection string for printing
+      const safeUrl = process.env.DATABASE_URL.replace(/:([^:@]+)@/, ":****@");
+      console.log(`🔌 PostgreSQL DATABASE_URL detected: ${safeUrl}`);
+      console.log("⚙️  Configuring gbrain to run on native PostgreSQL backend...");
 
-    // Clean up any stale postmaster.pid lock files to prevent WASM runtime errors
-    const localPid = path.join(localDbDir, "brain.pglite", "postmaster.pid");
-    const persistentPid = path.join(persistentDbDir, "brain.pglite", "postmaster.pid");
-    if (fs.existsSync(localPid)) {
-      try {
-        fs.unlinkSync(localPid);
-        console.log("🧹 Removed stale local postmaster.pid file");
-      } catch (err) {
-        console.warn("⚠️ Failed to remove local postmaster.pid:", err.message);
+      // Write config.json for PostgreSQL engine
+      const postgresConfig = {
+        engine: "postgres",
+        database_url: process.env.DATABASE_URL
+      };
+      if (process.env.GEMINI_API_KEY) {
+        postgresConfig.google_api_key = process.env.GEMINI_API_KEY;
       }
-    }
-    if (fs.existsSync(persistentPid)) {
-      try {
-        fs.unlinkSync(persistentPid);
-        console.log("🧹 Removed stale persistent postmaster.pid file");
-      } catch (err) {
-        console.warn("⚠️ Failed to remove persistent postmaster.pid:", err.message);
-      }
-    }
+      fs.writeFileSync(path.join(localDbDir, "config.json"), JSON.stringify(postgresConfig, null, 2), "utf8");
 
-    if (hasPersistentDb) {
-      console.log("🗄️ Loading database from persistent volume...");
-      execSync(`cp -R ${persistentDbDir}/* ${localDbDir}/`, { stdio: "inherit" });
-      
-      // Clean up local copy again after copying from persistent store just in case
+      // Initialize database schema
+      console.log("⚙️  Initializing database schema in Postgres...");
+      execSync(`gbrain init --url "${process.env.DATABASE_URL}" --non-interactive`, {
+        stdio: "inherit",
+        env: { ...process.env, HOME: "/tmp", BUN_JSC_useWasmIPInt: "false" }
+      });
+      console.log("✅ Successfully initialized database schema in Postgres.");
+    } else {
+      console.warn("\n⚠️  WARNING: Running with embedded PGlite WASM database on Railway.");
+      console.warn("⚠️  This is highly likely to crash due to W^X memory security restrictions in containers.");
+      console.warn("👉 FIX: Provision a PostgreSQL database service in your Railway project to automatically run on native Postgres.\n");
+
+      // Determine if database already exists in the persistent volume
+      const hasPersistentDb = fs.existsSync(path.join(persistentDbDir, "brain.pglite"));
+
+      // Clean up any stale postmaster.pid lock files to prevent WASM runtime errors
+      const localPid = path.join(localDbDir, "brain.pglite", "postmaster.pid");
+      const persistentPid = path.join(persistentDbDir, "brain.pglite", "postmaster.pid");
       if (fs.existsSync(localPid)) {
         try {
           fs.unlinkSync(localPid);
-          console.log("🧹 Removed stale local postmaster.pid after restore");
-        } catch (err) {}
+          console.log("🧹 Removed stale local postmaster.pid file");
+        } catch (err) {
+          console.warn("⚠️ Failed to remove local postmaster.pid:", err.message);
+        }
       }
-    } else if (fs.existsSync(path.join(seedDir, "brain.pglite"))) {
-      console.log("🗄️ Restoring database from seed...");
-      execSync(`cp -R ${seedDir}/* ${localDbDir}/`, { stdio: "inherit" });
-    } else {
-      console.log("🗄️ Initializing clean fresh local database...");
-      execSync("gbrain init --pglite", { stdio: "inherit", env: { ...process.env, HOME: "/tmp", BUN_JSC_useWasmIPInt: "false" } });
-    }
-
-    // Set config.json database_path to point to /tmp to avoid filesystem locks crashing PGlite
-    const localConfigPath = path.join(localDbDir, "config.json");
-    if (fs.existsSync(localConfigPath)) {
-      const configStr = fs.readFileSync(localConfigPath, "utf8");
-      const configJson = JSON.parse(configStr);
-      configJson.database_path = "/tmp/.gbrain/brain.pglite";
-      
-      // Inject API key if configured
-      if (process.env.GEMINI_API_KEY) {
-        configJson.google_api_key = process.env.GEMINI_API_KEY;
+      if (fs.existsSync(persistentPid)) {
+        try {
+          fs.unlinkSync(persistentPid);
+          console.log("🧹 Removed stale persistent postmaster.pid file");
+        } catch (err) {
+          console.warn("⚠️ Failed to remove persistent postmaster.pid:", err.message);
+        }
       }
-      
-      fs.writeFileSync(localConfigPath, JSON.stringify(configJson, null, 2), "utf8");
-      console.log("✅ Configured local database path and API key inside config.json");
+
+      if (hasPersistentDb) {
+        console.log("🗄️ Loading database from persistent volume...");
+        execSync(`cp -R ${persistentDbDir}/* ${localDbDir}/`, { stdio: "inherit" });
+        
+        // Clean up local copy again after copying from persistent store just in case
+        if (fs.existsSync(localPid)) {
+          try {
+            fs.unlinkSync(localPid);
+            console.log("🧹 Removed stale local postmaster.pid after restore");
+          } catch (err) {}
+        }
+      } else if (fs.existsSync(path.join(seedDir, "brain.pglite"))) {
+        console.log("🗄️ Restoring database from seed...");
+        execSync(`cp -R ${seedDir}/* ${localDbDir}/`, { stdio: "inherit" });
+      } else {
+        console.log("🗄️ Initializing clean fresh local database...");
+        execSync("gbrain init --pglite", { stdio: "inherit", env: { ...process.env, HOME: "/tmp", BUN_JSC_useWasmIPInt: "false" } });
+      }
+
+      // Set config.json database_path to point to /tmp to avoid filesystem locks crashing PGlite
+      const localConfigPath = path.join(localDbDir, "config.json");
+      if (fs.existsSync(localConfigPath)) {
+        const configStr = fs.readFileSync(localConfigPath, "utf8");
+        const configJson = JSON.parse(configStr);
+        configJson.database_path = "/tmp/.gbrain/brain.pglite";
+        
+        // Inject API key if configured
+        if (process.env.GEMINI_API_KEY) {
+          configJson.google_api_key = process.env.GEMINI_API_KEY;
+        }
+        
+        fs.writeFileSync(localConfigPath, JSON.stringify(configJson, null, 2), "utf8");
+        console.log("✅ Configured local database path and API key inside config.json");
+      }
+
+      // Recreate locks folder in local folder to ensure clean launch
+      const localLocks = path.join(localDbDir, ".locks");
+      if (fs.existsSync(localLocks)) {
+        fs.rmSync(localLocks, { recursive: true, force: true });
+      }
+      fs.mkdirSync(localLocks, { recursive: true });
+
+      // Ensure all directories and files are fully readable/writable inside Docker
+      execSync(`chmod -R 777 ${localDbDir}`, { stdio: "ignore" });
+
+      // Copy configurations back to the persistent volume so gbrain CLI can locate them
+      await syncLocalDbToPersistent();
+      console.log("✅ Database preparation complete.");
     }
 
-    // Recreate locks folder in local folder to ensure clean launch
-    const localLocks = path.join(localDbDir, ".locks");
-    if (fs.existsSync(localLocks)) {
-      fs.rmSync(localLocks, { recursive: true, force: true });
-    }
-    fs.mkdirSync(localLocks, { recursive: true });
-
-    // Ensure all directories and files are fully readable/writable inside Docker
-    execSync(`chmod -R 777 ${localDbDir}`, { stdio: "ignore" });
-
-    // Copy configurations back to the persistent volume so gbrain CLI can locate them
-    await syncLocalDbToPersistent();
-    console.log("✅ Database preparation complete.");
-
-    // Run diagnostics to debug the PGlite initialization failure
+    // Run diagnostics
     console.log("🩺 Running gbrain doctor diagnostics inside container...");
     let doctorSuccess = false;
     try {
@@ -246,7 +274,7 @@ try {
       console.error("❌ gbrain doctor command failed:", docErr.message);
     }
 
-    if (!doctorSuccess) {
+    if (!doctorSuccess && !process.env.DATABASE_URL) {
       console.warn("⚠️ Database initialization failed or database is corrupted. Wiping and initializing a clean database...");
       try {
         // Wipe local and persistent db directories
