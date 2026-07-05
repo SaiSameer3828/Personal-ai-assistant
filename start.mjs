@@ -156,22 +156,21 @@ try {
     const seedDir = "/usr/src/gbrain-seed";
     const { execSync } = await import("child_process");
 
-    // WIPE any existing cached databases to start completely fresh and clean
+    // WIPE any existing cached local databases to start clean
     if (fs.existsSync(localDbDir)) {
       fs.rmSync(localDbDir, { recursive: true, force: true });
-    }
-    if (fs.existsSync(persistentDbDir)) {
-      // Clean up files inside persistent storage but keep the mount directory
-      const files = fs.readdirSync(persistentDbDir);
-      for (const file of files) {
-        fs.rmSync(path.join(persistentDbDir, file), { recursive: true, force: true });
-      }
     }
 
     // Create local writable tmp directory for fast db lock operations
     fs.mkdirSync(localDbDir, { recursive: true });
 
-    if (fs.existsSync(path.join(seedDir, "brain.pglite"))) {
+    // Determine if database already exists in the persistent volume
+    const hasPersistentDb = fs.existsSync(path.join(persistentDbDir, "brain.pglite"));
+
+    if (hasPersistentDb) {
+      console.log("🗄️ Loading database from persistent volume...");
+      execSync(`cp -R ${persistentDbDir}/* ${localDbDir}/`, { stdio: "inherit" });
+    } else if (fs.existsSync(path.join(seedDir, "brain.pglite"))) {
       console.log("🗄️ Restoring database from seed...");
       execSync(`cp -R ${seedDir}/* ${localDbDir}/`, { stdio: "inherit" });
     } else {
