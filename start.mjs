@@ -238,10 +238,49 @@ try {
 
     // Run diagnostics to debug the PGlite initialization failure
     console.log("🩺 Running gbrain doctor diagnostics inside container...");
+    let doctorSuccess = false;
     try {
       execSync("gbrain doctor", { stdio: "inherit", env: { ...process.env, HOME: "/tmp", BUN_JSC_useWasmIPInt: "false" } });
+      doctorSuccess = true;
     } catch (docErr) {
       console.error("❌ gbrain doctor command failed:", docErr.message);
+    }
+
+    if (!doctorSuccess) {
+      console.warn("⚠️ Database initialization failed or database is corrupted. Wiping and initializing a clean database...");
+      try {
+        // Wipe local and persistent db directories
+        fs.rmSync(localDbDir, { recursive: true, force: true });
+        fs.rmSync(persistentDbDir, { recursive: true, force: true });
+        
+        // Recreate dirs
+        fs.mkdirSync(localDbDir, { recursive: true });
+        fs.mkdirSync(persistentDbDir, { recursive: true });
+
+        // Re-initialize
+        execSync("gbrain init --pglite", { 
+          stdio: "inherit", 
+          env: { ...process.env, HOME: "/tmp", BUN_JSC_useWasmIPInt: "false" } 
+        });
+
+        // Set config.json
+        const localConfigPath = path.join(localDbDir, "config.json");
+        if (fs.existsSync(localConfigPath)) {
+          const configStr = fs.readFileSync(localConfigPath, "utf8");
+          const configJson = JSON.parse(configStr);
+          configJson.database_path = "/tmp/.gbrain/brain.pglite";
+          if (process.env.GEMINI_API_KEY) {
+            configJson.google_api_key = process.env.GEMINI_API_KEY;
+          }
+          fs.writeFileSync(localConfigPath, JSON.stringify(configJson, null, 2), "utf8");
+        }
+
+        // Sync to persistent
+        await syncLocalDbToPersistent();
+        console.log("✅ Wiped and re-initialized clean database successfully!");
+      } catch (wipeErr) {
+        console.error("❌ Failed to wipe/re-initialize database:", wipeErr.message);
+      }
     }
   }
 } catch (err) {
