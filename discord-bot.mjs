@@ -176,7 +176,7 @@ client.on("messageCreate", async (message) => {
 client.login(config.discord.token).catch((err) => {
   console.error("Failed to login to Discord:", err.message);
   console.error("Make sure DISCORD_TOKEN is set in your .env file.");
-  process.exit(1);
+  // Do NOT call process.exit(1) here — other services (email ingestion, WhatsApp) must keep running
 });
 
 console.log("🤖 Starting Personal AI Assistant...");
