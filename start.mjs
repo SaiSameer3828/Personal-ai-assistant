@@ -349,9 +349,10 @@ if (config.whatsapp.accessToken) {
 try {
   if (isDocker) {
     console.log("🟢 Starting OpenClaw Gateway...");
+    const openclawEnv = { ...process.env, PORT: "18789" };
     const openclawProc = spawn("openclaw", ["gateway", "run", "--force"], {
       stdio: "inherit",
-      env: { ...process.env },
+      env: openclawEnv,
     });
     openclawProc.on("error", (err) => console.error("[OpenClaw Gateway] Error:", err.message));
     openclawProc.on("exit", (code) => {

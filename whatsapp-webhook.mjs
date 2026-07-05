@@ -175,6 +175,10 @@ const server = http.createServer(async (req, res) => {
   res.end("Not found");
 });
 
+server.on("error", (err) => {
+  console.error("❌ [WhatsApp Webhook Server] Error:", err.message);
+});
+
 server.listen(PORT, () => {
   console.log(`🟢 WhatsApp webhook server running on port ${PORT}`);
   console.log(`   Verify token: ${VERIFY_TOKEN}`);
