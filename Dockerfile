@@ -21,10 +21,9 @@ RUN git clone https://github.com/garrytan/gbrain.git
 WORKDIR /usr/src/gbrain
 RUN bun install
 
-# Set up global and local compatibility shell wrappers to run gbrain on Node.js using tsx (bypassing Bun container WASM bugs)
-RUN npm install -g tsx
+# Set up global gbrain wrapper with WASM interpreter fix baked in (BUN_JSC_useWasmIPInt=false prevents PGlite crash)
 RUN mkdir -p /root/.bun/bin /home/radesh/.bun/bin
-RUN echo '#!/bin/sh\nexec tsx /usr/src/gbrain/src/cli.ts "$@"' > /root/.bun/bin/gbrain && chmod +x /root/.bun/bin/gbrain
+RUN printf '#!/bin/sh\nexport BUN_JSC_useWasmIPInt=false\nexport HOME="${HOME:-/tmp}"\nexec bun /usr/src/gbrain/src/cli.ts "$@"\n' > /root/.bun/bin/gbrain && chmod +x /root/.bun/bin/gbrain
 RUN ln -s /root/.bun/bin/gbrain /home/radesh/.bun/bin/gbrain
 
 # Install OpenClaw globally (standard method)
