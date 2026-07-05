@@ -167,9 +167,37 @@ try {
     // Determine if database already exists in the persistent volume
     const hasPersistentDb = fs.existsSync(path.join(persistentDbDir, "brain.pglite"));
 
+    // Clean up any stale postmaster.pid lock files to prevent WASM runtime errors
+    const localPid = path.join(localDbDir, "brain.pglite", "postmaster.pid");
+    const persistentPid = path.join(persistentDbDir, "brain.pglite", "postmaster.pid");
+    if (fs.existsSync(localPid)) {
+      try {
+        fs.unlinkSync(localPid);
+        console.log("🧹 Removed stale local postmaster.pid file");
+      } catch (err) {
+        console.warn("⚠️ Failed to remove local postmaster.pid:", err.message);
+      }
+    }
+    if (fs.existsSync(persistentPid)) {
+      try {
+        fs.unlinkSync(persistentPid);
+        console.log("🧹 Removed stale persistent postmaster.pid file");
+      } catch (err) {
+        console.warn("⚠️ Failed to remove persistent postmaster.pid:", err.message);
+      }
+    }
+
     if (hasPersistentDb) {
       console.log("🗄️ Loading database from persistent volume...");
       execSync(`cp -R ${persistentDbDir}/* ${localDbDir}/`, { stdio: "inherit" });
+      
+      // Clean up local copy again after copying from persistent store just in case
+      if (fs.existsSync(localPid)) {
+        try {
+          fs.unlinkSync(localPid);
+          console.log("🧹 Removed stale local postmaster.pid after restore");
+        } catch (err) {}
+      }
     } else if (fs.existsSync(path.join(seedDir, "brain.pglite"))) {
       console.log("🗄️ Restoring database from seed...");
       execSync(`cp -R ${seedDir}/* ${localDbDir}/`, { stdio: "inherit" });
