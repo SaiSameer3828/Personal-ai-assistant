@@ -203,7 +203,7 @@ try {
       execSync(`cp -R ${seedDir}/* ${localDbDir}/`, { stdio: "inherit" });
     } else {
       console.log("🗄️ Initializing clean fresh local database...");
-      execSync("gbrain init --pglite", { stdio: "inherit", env: { ...process.env, HOME: "/tmp" } });
+      execSync("gbrain init --pglite", { stdio: "inherit", env: { ...process.env, HOME: "/tmp", BUN_JSC_useWasmIPInt: "false" } });
     }
 
     // Set config.json database_path to point to /tmp to avoid filesystem locks crashing PGlite
@@ -239,7 +239,7 @@ try {
     // Run diagnostics to debug the PGlite initialization failure
     console.log("🩺 Running gbrain doctor diagnostics inside container...");
     try {
-      execSync("gbrain doctor", { stdio: "inherit" });
+      execSync("gbrain doctor", { stdio: "inherit", env: { ...process.env, HOME: "/tmp", BUN_JSC_useWasmIPInt: "false" } });
     } catch (docErr) {
       console.error("❌ gbrain doctor command failed:", docErr.message);
     }
