@@ -194,13 +194,29 @@ try {
   try {
     const key = process.env.GEMINI_API_KEY || "";
     const projectRoot = path.resolve(process.cwd());
-    const syncScriptWslPath = projectRoot
-      .replace(/\\/g, "/")
-      .replace(/^([a-zA-Z]):/, (_, drive) => `/mnt/${drive.toLowerCase()}`) + "/scripts/sync-to-gbrain.sh";
-    execSync(`wsl bash -c "export GOOGLE_GENERATIVE_AI_API_KEY='${key}' && export GEMINI_API_KEY='${key}' && bash '${syncScriptWslPath}'"`, {
-      stdio: "inherit",
-      timeout: 120000,
-    });
+    const isWindows = process.platform === "win32";
+
+    if (isWindows) {
+      const syncScriptWslPath = projectRoot
+        .replace(/\\/g, "/")
+        .replace(/^([a-zA-Z]):/, (_, drive) => `/mnt/${drive.toLowerCase()}`) + "/scripts/sync-to-gbrain.sh";
+      execSync(`wsl bash -c "export GOOGLE_GENERATIVE_AI_API_KEY='${key}' && export GEMINI_API_KEY='${key}' && bash '${syncScriptWslPath}'"`, {
+        stdio: "inherit",
+        timeout: 120000,
+      });
+    } else {
+      const syncScriptPath = path.join(projectRoot, "scripts", "sync-to-gbrain.sh");
+      execSync(`bash "${syncScriptPath}"`, {
+        stdio: "inherit",
+        timeout: 120000,
+        env: {
+          ...process.env,
+          GOOGLE_GENERATIVE_AI_API_KEY: key,
+          GEMINI_API_KEY: key,
+          HOME: "/tmp"
+        }
+      });
+    }
   } catch (err) {
     console.warn("GBrain sync failed:", err.message);
   }
