@@ -15,7 +15,8 @@
     "digest": "node digest.mjs",
     "send": "node send-discord.mjs",
     "search": "node workflow-email-agent.mjs",
-    "setup": "wsl bash scripts/setup-workspace.sh"
+    "setup": "wsl bash scripts/setup-workspace.sh",
+    "test-whatsapp": "node scripts/test-whatsapp.mjs"
   },
   "keywords": [
     "ai",
