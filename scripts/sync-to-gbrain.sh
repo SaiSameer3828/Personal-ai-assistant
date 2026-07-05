@@ -2,7 +2,7 @@
 # Batch import all email memory files into GBrain
 # This is much faster than individual put commands
 
-export PATH=/home/radesh/.bun/bin:/usr/bin:/bin:$PATH
+export PATH=$HOME/.bun/bin:/usr/bin:/bin:$PATH
 
 MEMORY_DIR="$HOME/.openclaw/workspace/memory"
 IMPORT_DIR="/tmp/gbrain-email-import"

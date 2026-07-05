@@ -1,7 +1,7 @@
 #!/bin/bash
 # Update AGENTS.md to instruct the agent to use gbrain directly
 
-cat > ~/.openclaw/workspace/AGENTS.md << 'EOF'
+cat > ~/.openclaw/workspace/AGENTS.md << EOF
 # AGENTS.md - Agent Capabilities
 
 ## IMPORTANT: Memory Search Instructions
@@ -12,14 +12,14 @@ Instead, when a user asks about emails, use bash to run gbrain directly.
 ### How to search emails
 Run this command replacing QUERY with the user's search terms:
 
-    export PATH=/home/radesh/.bun/bin:/usr/bin:/bin:$PATH && gbrain query "QUERY"
+    export PATH=\$HOME/.bun/bin:/usr/bin:/bin:\$PATH && gbrain query "QUERY"
 
 This returns results ranked by semantic similarity with email subjects and content.
 Always use this method when users ask to search, summarize, or find emails.
 
 ### How to list all emails
 
-    export PATH=/home/radesh/.bun/bin:/usr/bin:/bin:$PATH && gbrain list --type note -n 50
+    export PATH=\$HOME/.bun/bin:/usr/bin:/bin:\$PATH && gbrain list --type note -n 50
 
 ## Email Intelligence
 

@@ -152,6 +152,13 @@ npm run auth
 > [!IMPORTANT]
 > The auth script requests `gmail.readonly` and `calendar.readonly` scopes. Ensure you grant full permissions during the Google OAuth flow.
 
+### 5. Bootstrap Workspace & Restart Gateway
+Initialize your OpenClaw workspace configuration and setup the background email cron scheduler in WSL:
+```bash
+npm run setup
+```
+This script dynamically configures your assistant's directives (`AGENTS.md` and `TOOLS.md`) with the correct WSL home paths, restarts the gateway, runs the initial email ingestion pipeline, and indexes the workspace database.
+
 ---
 
 ## 🚀 Running the Assistant

@@ -1,6 +1,8 @@
 #!/bin/bash
 # Setup OpenClaw workspace for Personal AI Assistant
-# Run this in WSL: bash /mnt/c/Users/botsa/email-collector/scripts/setup-workspace.sh
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 WORKSPACE="$HOME/.openclaw/workspace"
 MEMORY="$WORKSPACE/memory"
@@ -62,11 +64,11 @@ When asked for a daily report, I provide:
 EOF
 
 # Update TOOLS.md
-cat > "$WORKSPACE/TOOLS.md" << 'EOF'
+cat > "$WORKSPACE/TOOLS.md" << EOF
 # TOOLS.md - Local Setup
 
 ## Email Pipeline
-- **Source**: Gmail (botsa's personal account)
+- **Source**: Gmail (personal account)
 - **Ingestion**: Runs every 30 minutes via cron
 - **Storage**: Memory markdown files (email-{id}.md)
 - **Search**: OpenClaw memory semantic search
@@ -76,15 +78,15 @@ cat > "$WORKSPACE/TOOLS.md" << 'EOF'
 - **Telegram**: Secondary interface
 
 ## Commands (for self-reference)
-- Ingest emails: `node /mnt/c/Users/botsa/email-collector/scripts/ingest-emails-to-memory.mjs`
-- Search memory: `openclaw memory search "query"`
-- Send Discord message: `openclaw message send --channel discord --target channel:1516680999772094617 --message "text"`
+- Ingest emails: `node "$PROJECT_DIR/scripts/ingest-emails-to-memory.mjs"`
+- Search memory: `npx openclaw memory search "query"`
+- Send Discord message: `npx openclaw message send --channel discord --target channel:1516680999772094617 --message "text"`
 EOF
 
 echo "✅ Workspace files updated"
 
 # Setup cron job for email ingestion (every 30 minutes)
-CRON_CMD="*/30 * * * * cd /mnt/c/Users/botsa/email-collector && /usr/bin/node scripts/ingest-emails-to-memory.mjs >> /mnt/c/Users/botsa/email-collector/cron.log 2>&1"
+CRON_CMD="*/30 * * * * cd \"$PROJECT_DIR\" && /usr/bin/node scripts/ingest-emails-to-memory.mjs >> \"$PROJECT_DIR/cron.log\" 2>&1"
 
 # Check if cron job already exists
 if crontab -l 2>/dev/null | grep -q "ingest-emails-to-memory"; then
@@ -96,9 +98,9 @@ fi
 
 echo ""
 echo "🔄 Restarting OpenClaw gateway..."
-openclaw gateway restart 2>&1 || {
+(cd ~ && npx openclaw gateway restart) 2>&1 || {
     echo "Gateway restart via command failed. Trying systemd..."
-    systemctl --user restart openclaw-gateway 2>&1 || echo "Manual restart needed: openclaw gateway run"
+    systemctl --user restart openclaw-gateway 2>&1 || echo "Manual restart needed: (cd ~ && npx openclaw gateway run)"
 }
 
 echo ""
@@ -106,16 +108,16 @@ echo "⏳ Waiting for gateway to come back up..."
 sleep 5
 
 # Verify gateway is up
-openclaw status 2>&1 | head -5
+(cd ~ && npx openclaw status) 2>&1 | head -5
 
 echo ""
 echo "📧 Running initial email ingestion..."
-cd /mnt/c/Users/botsa/email-collector
+cd "$PROJECT_DIR"
 node scripts/ingest-emails-to-memory.mjs
 
 echo ""
 echo "🔍 Rebuilding memory index..."
-openclaw memory index --force --agent main 2>&1 || echo "Memory index may need manual rebuild after gateway stabilizes"
+(cd ~ && npx openclaw memory index --force --agent main) 2>&1 || echo "Memory index may need manual rebuild after gateway stabilizes"
 
 echo ""
 echo "✅ Setup complete! Your Personal AI Assistant is ready."

@@ -193,7 +193,11 @@ try {
   console.log("Syncing to GBrain...");
   try {
     const key = process.env.GEMINI_API_KEY || "";
-    execSync(`wsl bash -c "export GOOGLE_GENERATIVE_AI_API_KEY='${key}' && export GEMINI_API_KEY='${key}' && bash /mnt/c/Users/botsa/email-collector/scripts/sync-to-gbrain.sh"`, {
+    const projectRoot = path.resolve(process.cwd());
+    const syncScriptWslPath = projectRoot
+      .replace(/\\/g, "/")
+      .replace(/^([a-zA-Z]):/, (_, drive) => `/mnt/${drive.toLowerCase()}`) + "/scripts/sync-to-gbrain.sh";
+    execSync(`wsl bash -c "export GOOGLE_GENERATIVE_AI_API_KEY='${key}' && export GEMINI_API_KEY='${key}' && bash '${syncScriptWslPath}'"`, {
       stdio: "inherit",
       timeout: 120000,
     });

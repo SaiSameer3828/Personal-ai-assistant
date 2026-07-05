@@ -93,6 +93,21 @@ try {
 
       fs.writeFileSync(openclawConfigPath, JSON.stringify(configJson, null, 2), "utf8");
       console.log("⚙️ openclaw.json configuration sync complete.");
+
+      // Inject OpenAI compatibility key for memory indexing inside the SQLite database
+      if (process.env.GEMINI_API_KEY) {
+        console.log("⚙️ Injecting OpenAI compatibility key into agent SQLite database...");
+        try {
+          const { execSync } = await import("child_process");
+          execSync(
+            `echo '${process.env.GEMINI_API_KEY}' | openclaw models auth paste-api-key --provider openai --profile-id openai:default`,
+            { stdio: "ignore" }
+          );
+          console.log("✅ Injected OpenAI compatibility credentials into SQLite store");
+        } catch (authErr) {
+          console.error("⚠️ Failed to write SQLite auth profile:", authErr.message);
+        }
+      }
     } else {
       console.log("⏭️  OpenClaw config file not found at ~/.openclaw/openclaw.json (skipping injection)");
     }
@@ -148,8 +163,13 @@ try {
     // Create local writable tmp directory for fast db lock operations
     fs.mkdirSync(localDbDir, { recursive: true });
 
-    console.log("🗄️ Initializing clean fresh local database...");
-    execSync("gbrain init --pglite", { stdio: "inherit", env: { ...process.env, HOME: "/tmp" } });
+    if (fs.existsSync(path.join(seedDir, "brain.pglite"))) {
+      console.log("🗄️ Restoring database from seed...");
+      execSync(`cp -R ${seedDir}/* ${localDbDir}/`, { stdio: "inherit" });
+    } else {
+      console.log("🗄️ Initializing clean fresh local database...");
+      execSync("gbrain init --pglite", { stdio: "inherit", env: { ...process.env, HOME: "/tmp" } });
+    }
 
     // Set config.json database_path to point to /tmp to avoid filesystem locks crashing PGlite
     const localConfigPath = path.join(localDbDir, "config.json");
@@ -258,6 +278,31 @@ async function shutdown() {
   
   process.exit(0);
 }
+
+// 5. In-process Daily Report Scheduler (runs daily, bypassing the need for Cron daemon)
+let lastReportDate = "";
+setInterval(() => {
+  const now = new Date();
+  const todayStr = now.toISOString().split("T")[0];
+  
+  if (
+    now.getHours() === config.dailyReport.hour &&
+    now.getMinutes() === config.dailyReport.minute &&
+    lastReportDate !== todayStr
+  ) {
+    lastReportDate = todayStr;
+    console.log(`[${now.toISOString()}] ⏰ Triggering scheduled daily report...`);
+    try {
+      const reportProc = spawn("node", ["scripts/daily-report-cron.mjs"], {
+        stdio: "inherit",
+        env: { ...process.env },
+      });
+      reportProc.on("error", (err) => console.error("⚠️ [Daily Report] Failed to run script:", err.message));
+    } catch (err) {
+      console.error("⚠️ [Daily Report Scheduler] Failed to spawn child process:", err.message);
+    }
+  }
+}, 60000); // Check every 60 seconds
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);

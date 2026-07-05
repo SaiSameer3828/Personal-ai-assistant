@@ -5,6 +5,8 @@
  */
 
 import { execSync } from "child_process";
+import os from "os";
+import path from "path";
 import { getDailyReport } from "../agents/summary-agent.mjs";
 import { config } from "../config.mjs";
 
@@ -64,12 +66,14 @@ async function sendDailyReport() {
     } else {
       console.log("DISCORD_TOKEN not set. Falling back to OpenClaw CLI...");
       const escaped = report.replace(/"/g, '\\"').replace(/\n/g, '\\n');
+      const wslHomeDir = os.homedir();
+      const bunBinPath = path.join(wslHomeDir, ".bun", "bin");
       execSync(
-        `openclaw message send --channel discord --target "channel:${CHANNEL_ID}" --message "${escaped}"`,
+        `npx openclaw message send --channel discord --target "channel:${CHANNEL_ID}" --message "${escaped}"`,
         {
           stdio: "inherit",
           timeout: 15000,
-          env: { ...process.env, PATH: `/home/radesh/.bun/bin:/usr/bin:/bin:${process.env.PATH || ""}` },
+          env: { ...process.env, PATH: `${bunBinPath}:/usr/bin:/bin:${process.env.PATH || ""}` },
         }
       );
     }

@@ -1,7 +1,7 @@
 {
   "engine": "pglite",
-  "database_path": "/root/.gbrain/brain.pglite",
-  "embedding_model": "google:gemini-embedding-2",
+  "database_path": "/home/sai_sameer/.gbrain/brain.pglite",
+  "embedding_model": "openai:text-embedding-004",
   "embedding_dimensions": 768,
   "schema_pack": "gbrain-base-v2",
   "mcp": {
@@ -11,7 +11,5 @@
     "mode": "notify",
     "mode_prompted": true
   },
-  "google_api_key": "YOUR_GEMINI_API_KEY",
-  "expansion_model": "google:gemini-2.0-flash",
-  "chat_model": "google:gemini-2.0-flash-exp"
+  "google_api_key": ""
 }

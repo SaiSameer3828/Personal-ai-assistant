@@ -14,6 +14,10 @@ const client = new Client({
   partials: [Partials.Channel],
 });
 
+client.on("error", (err) => {
+  console.error("Discord client connection error:", err.message);
+});
+
 const MAX_DISCORD_LENGTH = 2000;
 
 /**
