@@ -15,6 +15,7 @@ export const config = {
     // Token loaded from env only — never hardcoded
     accessToken: process.env.WHATSAPP_ACCESS_TOKEN || "",
     verifyToken: process.env.WHATSAPP_VERIFY_TOKEN || "personal_ai_assistant_verify",
+    appSecret: process.env.WHATSAPP_APP_SECRET || "",
   },
   fireflies: {
     apiKey: process.env.FIREFLIES_API_KEY || "",

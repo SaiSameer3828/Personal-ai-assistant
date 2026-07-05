@@ -34,6 +34,14 @@ const isDocker = fs.existsSync("/.dockerenv") || process.env.RAILWAY_ENVIRONMENT
 try {
   if (isDocker) {
     const homeDir = process.env.HOME || "/root";
+
+    // Copy template config from /root/.openclaw to HOME if they differ and HOME's config doesn't exist
+    if (homeDir !== "/root" && !fs.existsSync(path.join(homeDir, ".openclaw", "openclaw.json")) && fs.existsSync("/root/.openclaw")) {
+      console.log(`📋 Copying template OpenClaw configurations from /root/.openclaw to ${homeDir}/.openclaw`);
+      fs.mkdirSync(path.join(homeDir, ".openclaw"), { recursive: true });
+      fs.cpSync("/root/.openclaw", path.join(homeDir, ".openclaw"), { recursive: true });
+    }
+
     const openclawConfigPath = path.join(homeDir, ".openclaw", "openclaw.json");
     if (fs.existsSync(openclawConfigPath)) {
       console.log("⚙️ Injecting environment variables into openclaw.json...");
@@ -119,7 +127,7 @@ try {
 // Database sync helper for container runs (copy from local fast VFS /tmp to persistent volume /root/.gbrain)
 const localDbDir = "/tmp/.gbrain";
 const homeDir = process.env.HOME || "/root";
-const persistentDbDir = path.join(homeDir, ".gbrain");
+const persistentDbDir = process.env.PERSISTENT_DB_DIR || path.join(homeDir, ".gbrain");
 
 async function syncLocalDbToPersistent() {
   try {

@@ -1,4 +1,5 @@
 import http from "http";
+import crypto from "crypto";
 import { config } from "./config.mjs";
 import { parseWebhookMessages, markAsRead, sendWhatsAppMessage } from "./lib/whatsapp-client.mjs";
 import { processIncomingMessage } from "./agents/whatsapp-agent.mjs";
@@ -19,19 +20,60 @@ import { processIncomingMessage } from "./agents/whatsapp-agent.mjs";
 const PORT = parseInt(process.env.PORT || process.env.WHATSAPP_WEBHOOK_PORT || "3002", 10);
 const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || "personal_ai_assistant_verify";
 
-function parseBody(req) {
+function parseBodyWithRaw(req) {
   return new Promise((resolve, reject) => {
     let body = "";
     req.on("data", (chunk) => (body += chunk));
     req.on("end", () => {
       try {
-        resolve(JSON.parse(body));
+        resolve({
+          raw: body,
+          json: JSON.parse(body),
+        });
       } catch {
-        resolve(null);
+        resolve({
+          raw: body,
+          json: null,
+        });
       }
     });
     req.on("error", reject);
   });
+}
+
+function verifySignature(rawBody, signatureHeader, appSecret) {
+  if (!appSecret) {
+    console.warn("⚠️ WARNING: WHATSAPP_APP_SECRET is not configured. Webhook signature verification is bypassed!");
+    return true;
+  }
+  if (!signatureHeader) {
+    console.error("❌ Signature verification failed: Missing x-hub-signature-256 header");
+    return false;
+  }
+  const elements = signatureHeader.split("=");
+  if (elements.length !== 2 || elements[0] !== "sha256") {
+    console.error("❌ Signature verification failed: Invalid signature format");
+    return false;
+  }
+  const signature = elements[1];
+  const expectedSignature = crypto
+    .createHmac("sha256", appSecret)
+    .update(rawBody)
+    .digest("hex");
+
+  try {
+    const isMatch = crypto.timingSafeEqual(
+      Buffer.from(signature, "hex"),
+      Buffer.from(expectedSignature, "hex")
+    );
+    if (!isMatch) {
+      console.error("❌ Signature verification failed: Signature mismatch");
+    }
+    return isMatch;
+  } catch (err) {
+    console.error("❌ Signature verification failed:", err.message);
+    return false;
+  }
 }
 
 const server = http.createServer(async (req, res) => {
@@ -59,7 +101,7 @@ const server = http.createServer(async (req, res) => {
   // Temporary test route (POST)
   if (req.method === "POST" && url.pathname === "/test") {
     console.log("✅ Test POST received");
-    const body = await parseBody(req);
+    const { json: body } = await parseBodyWithRaw(req);
     console.log(body);
     res.writeHead(200);
     res.end("OK");
@@ -69,7 +111,17 @@ const server = http.createServer(async (req, res) => {
   // Incoming messages (POST)
   if (req.method === "POST" && url.pathname === "/webhook") {
     console.log("🔥 POST /webhook received");
-    const body = await parseBody(req);
+    const { raw, json: body } = await parseBodyWithRaw(req);
+
+    // Verify signature
+    const signatureHeader = req.headers["x-hub-signature-256"];
+    const isValid = verifySignature(raw, signatureHeader, config.whatsapp.appSecret);
+
+    if (!isValid) {
+      res.writeHead(401, { "Content-Type": "text/plain" });
+      res.end("Unauthorized: Invalid signature");
+      return;
+    }
 
     // Respond 200 immediately (Meta requires quick response)
     res.writeHead(200);
