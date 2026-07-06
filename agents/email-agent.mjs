@@ -28,8 +28,20 @@ function filterRawResultsToEmails(rawResults) {
  */
 export async function searchEmails(query, sender = null) {
   let searchQuery = query;
+
+  // Clean query if it falls back to the full command message
+  const lowerQuery = searchQuery.toLowerCase().trim();
+  if (
+    lowerQuery.startsWith("search emails from") ||
+    lowerQuery.startsWith("search mails from") ||
+    lowerQuery.startsWith("emails from") ||
+    lowerQuery.startsWith("mails from")
+  ) {
+    searchQuery = "";
+  }
+
   if (sender) {
-    searchQuery = `from ${sender} ${query}`;
+    searchQuery = `from ${sender} ${searchQuery}`.trim();
   }
 
   const rawResults = queryGBrain(searchQuery);
