@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { transcribeAudioFile, transcribeBuffer } from "../lib/meeting-transcriber.mjs";
 import { analyzeMeeting, quickSummary } from "../lib/meeting-summarizer.mjs";
-import { storeDocument, queryGBrain } from "../lib/gbrain-client.mjs";
+import { storeDocument, queryGBrain, parseGbrainResults, runGbrain } from "../lib/gbrain-client.mjs";
 import { generateResponse } from "../lib/gemini-client.mjs";
 
 /**
@@ -167,12 +167,47 @@ Generate a structured brief (max 500 words):
 
 /**
  * Get summaries of all stored meetings.
- * @returns {string}
+ * @returns {Promise<string>}
  */
-export function getStoredMeetings() {
-  const results = queryGBrain("meeting summary participants action items");
-  if (!results || results.trim().length === 0) {
-    return "No meeting recordings processed yet. Upload a meeting audio file to get started.";
+export async function getStoredMeetings() {
+  let rawResults = "";
+  let fullDocs = [];
+  try {
+    rawResults = queryGBrain("meeting summary participants action items");
+    if (rawResults && rawResults.trim().length > 0) {
+      const matches = parseGbrainResults(rawResults);
+      const uniqueSlugs = [...new Set(matches.map((m) => m.slug))].slice(0, 5);
+
+      for (const slug of uniqueSlugs) {
+        try {
+          const docContent = runGbrain(`get ${slug}`);
+          if (docContent && docContent.trim().length > 0) {
+            fullDocs.push(`### Meeting: ${slug}\n${docContent}`);
+          }
+        } catch (getErr) {
+          console.warn(`Failed to fetch stored meeting doc for slug ${slug}:`, getErr.message);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Stored meetings query failed:", err.message);
   }
-  return `## 📋 Stored Meeting Summaries\n\n${results}`;
+
+  if (fullDocs.length > 0) {
+    const prompt = `You are a helpful personal AI assistant. Summarize the stored meetings based on the following records from the database:
+
+---
+${fullDocs.join("\n\n")}
+---
+
+Format a clean, markdown list of these stored meetings, showing the title, date, key participants, and a brief 2-3 sentence overview for each.`;
+
+    try {
+      return await generateResponse(prompt);
+    } catch (err) {
+      console.error("Failed to generate stored meetings summary:", err.message);
+      return `## 📋 Stored Meeting Summaries\n\n${rawResults}`;
+    }
+  }
+  return "No meeting recordings processed yet. Upload a meeting audio file to get started.";
 }
