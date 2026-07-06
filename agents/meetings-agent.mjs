@@ -1,4 +1,4 @@
-import { queryGBrain, storeDocument } from "../lib/gbrain-client.mjs";
+import { queryGBrain, storeDocument, parseGbrainResults, runGbrain } from "../lib/gbrain-client.mjs";
 import { generateResponse } from "../lib/gemini-client.mjs";
 import { config } from "../config.mjs";
 
@@ -114,9 +114,44 @@ export async function getRecentMeetings(limit = 5) {
   }
 
   // Fallback: search GBrain for stored meetings
-  const gbrainResults = queryGBrain("meeting summary participants");
-  if (gbrainResults && gbrainResults.trim().length > 0) {
-    return `## 📋 Stored Meeting Summaries\n\n${gbrainResults}`;
+  let rawResults = "";
+  let fullDocs = [];
+  try {
+    rawResults = queryGBrain("meeting summary participants");
+    if (rawResults && rawResults.trim().length > 0) {
+      const matches = parseGbrainResults(rawResults);
+      const uniqueSlugs = [...new Set(matches.map((m) => m.slug))].slice(0, limit);
+
+      for (const slug of uniqueSlugs) {
+        try {
+          const docContent = runGbrain(`get ${slug}`);
+          if (docContent && docContent.trim().length > 0) {
+            fullDocs.push(`### Meeting: ${slug}\n${docContent}`);
+          }
+        } catch (getErr) {
+          console.warn(`Failed to fetch stored meeting doc for slug ${slug}:`, getErr.message);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Recent meetings query failed:", err.message);
+  }
+
+  if (fullDocs.length > 0) {
+    const prompt = `You are a helpful personal AI assistant. Summarize the recent meetings based on the following records:
+
+---
+${fullDocs.join("\n\n")}
+---
+
+Format a clean, markdown list of these recent meetings, showing the title, date, key participants, and a brief 2-3 sentence overview for each.`;
+
+    try {
+      return await generateResponse(prompt);
+    } catch (err) {
+      console.error("Failed to generate recent meetings summary:", err.message);
+      return `## 📋 Stored Meeting Summaries\n\n${rawResults}`;
+    }
   }
   return "No meetings found. Upload a meeting recording or configure Fireflies API key.";
 }
@@ -127,13 +162,49 @@ export async function getRecentMeetings(limit = 5) {
  * @returns {Promise<string>}
  */
 export async function searchMeetings(topic) {
-  const results = queryGBrain(`meeting ${topic}`);
+  let rawResults = "";
+  let fullDocs = [];
 
-  if (!results || results.trim().length === 0) {
+  try {
+    rawResults = queryGBrain(`meeting ${topic}`);
+    if (rawResults && rawResults.trim().length > 0) {
+      const matches = parseGbrainResults(rawResults);
+      const uniqueSlugs = [...new Set(matches.map((m) => m.slug))].slice(0, 3);
+
+      for (const slug of uniqueSlugs) {
+        try {
+          const docContent = runGbrain(`get ${slug}`);
+          if (docContent && docContent.trim().length > 0) {
+            fullDocs.push(`### Meeting Document: ${slug}\n${docContent}`);
+          }
+        } catch (getErr) {
+          console.warn(`Failed to fetch full meeting doc for slug ${slug}:`, getErr.message);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Meetings query failed:", err.message);
+  }
+
+  if (fullDocs.length === 0) {
     return `No meetings found about "${topic}".`;
   }
 
-  return results;
+  const prompt = `You are a helpful personal AI assistant. The user is asking about a meeting with the topic/query: "${topic}".
+Below is the content of the relevant meeting documents retrieved from their database:
+
+---
+${fullDocs.join("\n\n")}
+---
+
+Please provide a helpful, natural language response containing the meeting details, summary, decisions, action items, or the raw transcript/dialogue if they explicitly asked for it.`;
+
+  try {
+    return await generateResponse(prompt);
+  } catch (err) {
+    console.error("Failed to generate searchMeetings response:", err.message);
+    return `Here are the matching meeting records:\n\n${rawResults}`;
+  }
 }
 
 /**
@@ -218,9 +289,45 @@ export async function getTodaysMeetingSummaries() {
 
   // Fallback: search GBrain for today's meetings
   const today = new Date().toISOString().split("T")[0];
-  const results = queryGBrain(`meeting ${today}`);
-  if (results && results.trim().length > 0) {
-    return `## Today's Meetings (from memory)\n\n${results}`;
+  let rawResults = "";
+  let fullDocs = [];
+
+  try {
+    rawResults = queryGBrain(`meeting ${today}`);
+    if (rawResults && rawResults.trim().length > 0) {
+      const matches = parseGbrainResults(rawResults);
+      const uniqueSlugs = [...new Set(matches.map((m) => m.slug))].slice(0, 3);
+
+      for (const slug of uniqueSlugs) {
+        try {
+          const docContent = runGbrain(`get ${slug}`);
+          if (docContent && docContent.trim().length > 0) {
+            fullDocs.push(`### Meeting: ${slug}\n${docContent}`);
+          }
+        } catch (getErr) {
+          console.warn(`Failed to fetch today's meeting doc for slug ${slug}:`, getErr.message);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("Today's meetings query failed:", err.message);
+  }
+
+  if (fullDocs.length > 0) {
+    const prompt = `You are a helpful personal AI assistant. Summarize today's meetings based on the following meeting records retrieved from the database:
+
+---
+${fullDocs.join("\n\n")}
+---
+
+Provide a consolidated daily summary of these meetings, highlighting the main discussion points, decisions, and action items.`;
+
+    try {
+      return await generateResponse(prompt);
+    } catch (err) {
+      console.error("Failed to generate today's meeting summary:", err.message);
+      return `## Today's Meetings (from memory)\n\n${rawResults}`;
+    }
   }
   return "No meeting recordings found for today.";
 }
