@@ -214,7 +214,7 @@ Format a clean, friendly response presenting the details of this email:
 1. Sender (From)
 2. Date
 3. Subject
-4. The full content/body of the email clearly formatted under a section headers.`;
+4. A concise summary of the email (max 300 words). Do NOT include long tracking links, verification URLs, or code. Focus only on the core message and key details.`;
 
     return await generateResponse(prompt);
   } catch (err) {
