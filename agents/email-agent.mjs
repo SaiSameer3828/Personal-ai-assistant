@@ -1,5 +1,5 @@
-import { queryGBrain, parseGbrainResults } from "../lib/gbrain-client.mjs";
-import { summarizeEmails } from "../lib/gemini-client.mjs";
+import { queryGBrain, parseGbrainResults, runGbrain } from "../lib/gbrain-client.mjs";
+import { summarizeEmails, generateResponse } from "../lib/gemini-client.mjs";
 
 /**
  * Email Agent - Searches email memory, filters relevant emails, extracts action items.
@@ -201,7 +201,6 @@ export async function getLastEmail(sender = null) {
   const latestMatch = emailMatches[0];
 
   try {
-    const { runGbrain } = await import("../lib/gbrain-client.mjs");
     const docContent = runGbrain(`get ${latestMatch.slug}`);
     
     const prompt = `You are a helpful personal AI assistant. The user asked for their last email (optionally from a sender).
