@@ -137,6 +137,24 @@ const server = http.createServer(async (req, res) => {
 
     for (const msg of messages) {
       try {
+        // If it's an audio message, download and transcribe it!
+        if (msg.type === "audio" && msg.audio) {
+          console.log(`🎙️ WhatsApp audio message detected (Media ID: ${msg.audio.id}). Downloading...`);
+          try {
+            const { downloadWhatsAppMedia } = await import("./lib/whatsapp-client.mjs");
+            const { transcribeAudio } = await import("./lib/voice-handler.mjs");
+
+            const { buffer, mimeType } = await downloadWhatsAppMedia(msg.audio.id);
+            console.log(`🎙️ Audio downloaded (${buffer.length} bytes). Transcribing...`);
+
+            const { text } = await transcribeAudio(buffer, mimeType);
+            console.log(`🎙️ Transcribed text: "${text}"`);
+            msg.text = text;
+          } catch (audioErr) {
+            console.error("❌ WhatsApp audio processing failed:", audioErr.message);
+          }
+        }
+
         console.log(`📱 WhatsApp from ${msg.senderName} (${msg.from}): ${msg.text}`);
 
         // Mark as read
