@@ -67,6 +67,18 @@ export async function processCommand(message) {
     // Step 1: Parse intent
     const { intent, query, sender } = await parseIntent(message);
 
+    const isLastEmailQuery = cleanMsg.includes("last mail") || 
+                             cleanMsg.includes("latest mail") || 
+                             cleanMsg.includes("last email") || 
+                             cleanMsg.includes("latest email") ||
+                             cleanMsg.includes("recent email") ||
+                             cleanMsg.includes("recent mail");
+
+    if (isLastEmailQuery) {
+      const { getLastEmail } = await import("./email-agent.mjs");
+      return await getLastEmail(sender);
+    }
+
     // Step 2: Route to agent
     switch (intent) {
       case "search_emails":

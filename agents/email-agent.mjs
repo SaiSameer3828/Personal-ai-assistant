@@ -149,3 +149,92 @@ function formatEmailSearchResults(matches) {
     return result;
   }).join("\n\n");
 }
+
+/**
+ * Retrieve the single most recent email, optionally filtered by sender.
+ * @param {string|null} sender - Optional sender name/email to filter by
+ * @returns {Promise<string>}
+ */
+export async function getLastEmail(sender = null) {
+  let query = "email";
+  if (sender) {
+    query = `email from ${sender}`;
+  }
+
+  const rawResults = queryGBrain(query);
+  if (!rawResults || rawResults.trim().length === 0) {
+    return sender 
+      ? `No emails found from "${sender}".`
+      : "No emails found in memory.";
+  }
+
+  const allMatches = parseGbrainResults(rawResults);
+  let emailMatches = allMatches.filter((m) => m.slug.startsWith("email-"));
+
+  if (sender) {
+    emailMatches = emailMatches.filter((m) => {
+      const fromLine = m.bodyLines.find(l => l.toLowerCase().startsWith("from:"));
+      return fromLine && fromLine.toLowerCase().includes(sender.toLowerCase());
+    });
+  }
+
+  if (emailMatches.length === 0) {
+    return sender 
+      ? `No emails found from "${sender}".`
+      : "No emails found in memory.";
+  }
+
+  // Helper to parse dates and sort
+  const getEmailTimestamp = (match) => {
+    const dateLine = match.bodyLines.find(l => l.startsWith("Date:"));
+    if (dateLine) {
+      const dateStr = dateLine.replace("Date:", "").trim();
+      const parsed = Date.parse(dateStr);
+      if (!isNaN(parsed)) return parsed;
+    }
+    return 0;
+  };
+
+  // Sort email matches by date descending (most recent first)
+  emailMatches.sort((a, b) => getEmailTimestamp(b) - getEmailTimestamp(a));
+
+  const latestMatch = emailMatches[0];
+
+  try {
+    const { runGbrain } = await import("../lib/gbrain-client.mjs");
+    const docContent = runGbrain(`get ${latestMatch.slug}`);
+    
+    const prompt = `You are a helpful personal AI assistant. The user asked for their last email (optionally from a sender).
+Below is the full content of their single most recent email retrieved from the database:
+
+---
+${docContent}
+---
+
+Format a clean, friendly response presenting the details of this email:
+1. Sender (From)
+2. Date
+3. Subject
+4. The full content/body of the email clearly formatted under a section headers.`;
+
+    return await generateResponse(prompt);
+  } catch (err) {
+    console.error("Failed to fetch/summarize last email:", err.message);
+    
+    // Fallback to formatted snippet
+    const subjectHeader = latestMatch.header.split(" -- ")[1] || "";
+    const subject = subjectHeader.replace("# Email: ", "").replace("# Email:", "").trim();
+    const fromLine = latestMatch.bodyLines.find(l => l.startsWith("From:")) || "";
+    const dateLine = latestMatch.bodyLines.find(l => l.startsWith("Date:")) || "";
+    const snippet = latestMatch.bodyLines
+      .filter(l => !l.startsWith("From:") && !l.startsWith("To:") && !l.startsWith("Subject:") && !l.startsWith("Date:") && l.trim().length > 0)
+      .join(" ");
+      
+    let result = `✉️ **Your last email:**\n`;
+    result += `• **Subject:** ${subject}\n`;
+    if (fromLine) result += `• **${fromLine}**\n`;
+    if (dateLine) result += `• **${dateLine}**\n`;
+    if (snippet) result += `• **Snippet:** ${snippet}`;
+    return result;
+  }
+}
