@@ -29,3 +29,6 @@ run.sh
 Thumbs.db
 .locks/
 .gbrain-source
+
+# Presentation files
+presentation_study_guide.md
